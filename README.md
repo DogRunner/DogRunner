@@ -70,6 +70,18 @@ MIGRATION_DIRECTION=down go run migrate.go
 MIGRATION_DIRECTION=force MIGRATION_VERSION={対象のバージョン番号} go run migrate.go
 ```
 
+**dogfulのdogrunのデータ移行**
+DBが起動している前提
+1. cd ./migrate/dogful
+2. go run migrate.go
+
+下記が出れば成功
+件数は、2025/1/26時点
+```
+コミットします
+Inserted new record. total count :498
+```
+
 ## go doc
 
 ### インストール方法
