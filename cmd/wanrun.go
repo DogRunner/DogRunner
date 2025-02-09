@@ -142,11 +142,13 @@ func newRouter(e *echo.Echo, dbConn *gorm.DB) {
 	auth := e.Group("auth")
 	// dogowner
 	auth.POST("/dogowner/token", authController.LogInDogowner)
-	auth.POST("dogowner/revoke", authController.RevokeDogowner, authMW.RoleAuthorization(authMW.DOG_MANAGE))
+	auth.POST("/dogowner/revoke", authController.RevokeDogowner, authMW.RoleAuthorization(authMW.DOG_MANAGE))
 	// auth.GET("/google/oauth", authController.GoogleOAuth)
 	// dogrunmg
-	auth.POST("dogrunmg/token", authController.LogInDogrunmg)
-	auth.POST("dogrunmg/revoke", authController.RevokeDogrunmg, authMW.RoleAuthorization(authMW.DOGRUN_MANAGE))
+	auth.POST("/dogrunmg/token", authController.LogInDogrunmg)
+	auth.POST("/dogrunmg/revoke", authController.RevokeDogrunmg, authMW.RoleAuthorization(authMW.DOGRUN_MANAGE))
+	//general
+	auth.GET("/general/token", authController.IssueGeneralUserToke)
 
 	//interaction関連
 	interactionController := newInteraction(dbConn)

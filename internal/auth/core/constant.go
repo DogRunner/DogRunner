@@ -14,3 +14,9 @@ const (
 	DOGOWNER_ROLE       int = 3
 	GENERAL             int = 100
 )
+
+// 一般ユーザーのUserID
+const (
+	GENERAL_USER_ID     int64  = -999
+	GENERAL_USER_JWT_ID string = "general"
+)
