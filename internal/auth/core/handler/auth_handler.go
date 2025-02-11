@@ -396,10 +396,10 @@ func createToken(
 ) (string, error) {
 	logger := log.GetLogger(c).Sugar()
 
-	var expireNumericDate *jwt.NumericDate
+	var expiresNumericDate *jwt.NumericDate
 	//0の場合は無期限トークンの発行
 	if expTime != 0 {
-		expireNumericDate = jwt.NewNumericDate( // 有効時間
+		expiresNumericDate = jwt.NewNumericDate( // 有効時間
 			time.Now().Add(
 				time.Hour * time.Duration(expTime),
 			),
@@ -411,7 +411,7 @@ func createToken(
 		UserID: strconv.FormatInt(uaDTO.UserID, 10), // stringにコンバート
 		Role:   uaDTO.RoleID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: expireNumericDate, // 有効時間
+			ExpiresAt: expiresNumericDate, // 有効時間
 			ID:        uaDTO.JwtID,
 		},
 	}

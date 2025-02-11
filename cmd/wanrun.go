@@ -148,7 +148,7 @@ func newRouter(e *echo.Echo, dbConn *gorm.DB) {
 	auth.POST("/dogrunmg/token", authController.LogInDogrunmg)
 	auth.POST("/dogrunmg/revoke", authController.RevokeDogrunmg, authMW.RoleAuthorization(authMW.DOGRUN_MANAGE))
 	//general
-	auth.GET("/general/token", authController.IssueGeneralUserToke)
+	auth.GET("/general/token", authController.IssueGeneralUserToken)
 
 	//interaction関連
 	interactionController := newInteraction(dbConn)

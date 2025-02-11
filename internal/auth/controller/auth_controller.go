@@ -21,7 +21,7 @@ type IAuthController interface {
 	RevokeDogowner(echo.Context) error
 	RevokeDogrunmg(echo.Context) error
 	// GoogleOAuth(echo.Context) error
-	IssueGeneralUserToke(echo.Context) error
+	IssueGeneralUserToken(echo.Context) error
 }
 
 type authController struct {
@@ -267,7 +267,7 @@ func (ac *authController) RevokeDogrunmg(c echo.Context) error {
 //
 // return:
 //   - error:	エラー
-func (ac *authController) IssueGeneralUserToke(c echo.Context) error {
+func (ac *authController) IssueGeneralUserToken(c echo.Context) error {
 
 	token, wrErr := ac.ah.IssueGeneralUserToke(c)
 	if wrErr != nil {
