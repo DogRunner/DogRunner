@@ -24,10 +24,8 @@ func RequestLoggerMiddleware(logger *zap.Logger) echo.MiddlewareFunc {
 				zap.String("method", c.Request().Method),
 				zap.String("path", c.Request().URL.Path),
 				zap.Int("bytes_in", int(c.Request().ContentLength)),
+				zap.Any("header", c.Request().Header),
 			)
-
-			// コンテキストにロガーをセット
-			c.Set("logger", reqLogger)
 
 			// リクエスト処理の開始時間
 			start := time.Now()
@@ -55,7 +53,7 @@ func GetLogger(c echo.Context) *zap.Logger {
 	}
 	requestID := c.Response().Header().Get(echo.HeaderXRequestID)
 	logger := gLogger.With(zap.String("request_id", requestID))
-	logger.Debug("コンテキストにlogerがないため、生成してコンテキストにセット")
+	logger.Debug("コンテキストにloggerがないため、生成してコンテキストにセット")
 	c.Set("logger", logger) // コンテキストにロガーをセット
 	return logger
 }

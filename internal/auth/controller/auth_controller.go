@@ -16,11 +16,12 @@ import (
 
 type IAuthController interface {
 	// SignUp(c echo.Context) error
-	LogInDogowner(c echo.Context) error
-	LogInDogrunmg(c echo.Context) error
-	RevokeDogowner(c echo.Context) error
-	RevokeDogrunmg(c echo.Context) error
-	// GoogleOAuth(c echo.Context) error
+	LogInDogowner(echo.Context) error
+	LogInDogrunmg(echo.Context) error
+	RevokeDogowner(echo.Context) error
+	RevokeDogrunmg(echo.Context) error
+	// GoogleOAuth(echo.Context) error
+	IssueGeneralUserToken(echo.Context) error
 }
 
 type authController struct {
@@ -258,3 +259,21 @@ func (ac *authController) RevokeDogrunmg(c echo.Context) error {
 // 	// どちらのパラメータもない場合は不正なリクエストとしてエラーを返す
 // 	return errOAuthInvalidReq
 // }
+
+// IssueGeneralUserToke: 一般ユーザーのjwt発行
+//
+// args:
+//   - echo.Context:	コンテキスト
+//
+// return:
+//   - error:	エラー
+func (ac *authController) IssueGeneralUserToken(c echo.Context) error {
+
+	token, wrErr := ac.ah.IssueGeneralUserToke(c)
+	if wrErr != nil {
+		return wrErr
+	}
+	return c.JSON(http.StatusOK, map[string]string{
+		"accessToken": token,
+	})
+}

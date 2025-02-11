@@ -36,6 +36,7 @@ var skipPaths = []string{
 	"/dogowner/signUp",
 	"/org/contract",
 	"/health",
+	"/auth/general/token",
 }
 
 // NewJwtValidationMiddleware: JWT検証用のミドルウェア設定を生成
@@ -55,7 +56,7 @@ func (aj *authJwt) NewJwtValidationMiddleware() echo.MiddlewareFunc {
 			TokenLookup: core.TOKEN_LOOK_UP, // トークンの取得場所
 			ContextKey:  core.CONTEXT_KEY,   // カスタムキーを設定
 			Skipper: func(c echo.Context) bool { // スキップするパスを指定
-				path := c.Path()
+				path := c.Request().URL.Path
 				return slices.Contains(skipPaths, path)
 			},
 			SuccessHandler: func(c echo.Context) {
@@ -70,6 +71,12 @@ func (aj *authJwt) NewJwtValidationMiddleware() echo.MiddlewareFunc {
 
 				// 全ての検証を終えたclaimsをcontextにセット
 				c.Set(core.CONTEXT_KEY, claims)
+			},
+			ErrorHandler: func(c echo.Context, err error) error { //エラーをラップ
+				logger := log.GetLogger(c).Sugar()
+				logger.Error(err)
+				err = wrErrs.NewWRError(err, "authentication error", wrErrs.NewAuthClientErrorEType())
+				return err
 			},
 		},
 	)
@@ -173,6 +180,10 @@ func (aj *authJwt) jwtIDValid(c echo.Context, ac *handler.AccountClaims) error {
 		case core.DOGRUNMG_ROLE, core.DOGRUNMG_ADMIN_ROLE:
 			// dogrunmgのjwtID取得
 			return aj.ar.GetDogrunmgJwtID(c, id)
+		//general
+		case core.GENERAL:
+			//jetIDの定数返す
+			return core.GENERAL_USER_JWT_ID, nil
 		default:
 			return "", wrErrs.NewWRError(
 				nil,

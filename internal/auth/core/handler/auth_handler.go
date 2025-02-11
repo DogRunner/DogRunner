@@ -23,6 +23,7 @@ type IAuthHandler interface {
 	LogInDogrunmg(c echo.Context, ador authDTO.AuthDogrunmgReq) (string, error)
 	RevokeDogrunmg(c echo.Context, dmID int64) error
 	// GoogleOAuth(c echo.Context, authorizationCode string, grantType types.GrantType) (dto.ResDogOwnerDto, error)
+	IssueGeneralUserToke(c echo.Context) (string, error)
 }
 
 type authHandler struct {
@@ -382,7 +383,7 @@ func GetSignedJwt(c echo.Context, uaDTO authDTO.UserAuthInfoDTO) (string, error)
 //   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
 //   - string: secretKey   トークンの署名に使用する秘密鍵を表す文字列
 //   - authDTO.UserAuthInfoDTO: jwtで使用する情報
-//   - int: expTime トークンの有効期限を秒単位で指定
+//   - int: expTime トークンの有効期限を秒単位で指定. 0なら無期限とする
 //
 // return:
 //   - string: 生成されたJWTトークンを表す文字列
@@ -395,17 +396,23 @@ func createToken(
 ) (string, error) {
 	logger := log.GetLogger(c).Sugar()
 
+	var expiresNumericDate *jwt.NumericDate
+	//0の場合は無期限トークンの発行
+	if expTime != 0 {
+		expiresNumericDate = jwt.NewNumericDate( // 有効時間
+			time.Now().Add(
+				time.Hour * time.Duration(expTime),
+			),
+		)
+	}
+
 	// JWTのペイロード
 	claims := AccountClaims{
 		UserID: strconv.FormatInt(uaDTO.UserID, 10), // stringにコンバート
 		Role:   uaDTO.RoleID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate( // 有効時間
-				time.Now().Add(
-					time.Hour * time.Duration(expTime),
-				),
-			),
-			ID: uaDTO.JwtID,
+			ExpiresAt: expiresNumericDate, // 有効時間
+			ID:        uaDTO.JwtID,
 		},
 	}
 
@@ -483,4 +490,35 @@ func validateEmailOrPhoneNumber(doReq authDTO.AuthDogOwnerReq) error {
 
 	// どちらか片方だけが入力されている場合は正常
 	return nil
+}
+
+// IssueGeneralUserToke: 一般ユーザーのjwr発行処理
+//
+// args:
+//   - echo.Context:	コンテキスト
+//
+// return:
+//   - string:	jwt
+//   - error:	エラー
+func (ah *authHandler) IssueGeneralUserToke(c echo.Context) (string, error) {
+	logger := log.GetLogger(c).Sugar()
+	logger.Info("一般ユーザートークンの発行")
+
+	userInfoDTO := authDTO.UserAuthInfoDTO{
+		UserID: core.GENERAL_USER_ID,
+		JwtID:  core.GENERAL_USER_JWT_ID,
+		RoleID: core.GENERAL,
+	}
+
+	// 秘密鍵取得
+	secretKey := configs.FetchConfigStr("jwt.os.secret.key")
+
+	// jwt token生成(無期限)
+	signedToken, wrErr := createToken(c, secretKey, userInfoDTO, 0)
+
+	if wrErr != nil {
+		return "", wrErr
+	}
+
+	return signedToken, wrErr
 }

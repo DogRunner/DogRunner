@@ -70,14 +70,16 @@ func RoleAuthorization(allowedRoles []int) echo.MiddlewareFunc {
 			//システムユーザーはチェック対象外
 			for _, systemRole := range SYSTEM {
 				if userRole == systemRole {
-					return nil
+					err := next(c)
+					return err
 				}
 			}
 
 			//引数の認可対象であるかチェック
 			for _, allowedRole := range allowedRoles {
 				if userRole == allowedRole {
-					return nil // 許可されたロールの場合、次へ進む
+					err := next(c) // 許可されたロールの場合、次へ進む
+					return err
 				}
 			}
 
