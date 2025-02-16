@@ -157,9 +157,6 @@ func (h *dogrunHandler) SearchAroundDogruns(c echo.Context, condition dto.Search
 	}
 	logger.Infof("DBから取得数:%d", len(dogrunsD))
 
-	//ドッグラン情報の過不足フィルター
-	dogrunsD = excludeInsufficientDogrunInfo(c, dogrunsD)
-
 	//検索結果からレスポンスを作成
 	dogrunLists, err := h.integrateDogrunInfos(dogrunsG, dogrunsD)
 	logger.Infof("レスポンス件数:%d", len(dogrunLists))
@@ -171,6 +168,9 @@ func (h *dogrunHandler) SearchAroundDogruns(c echo.Context, condition dto.Search
 	if err = h.GenerateSetDogrunIDs(c, dogrunLists); err != nil {
 		return nil, err
 	}
+
+	//ドッグラン情報の過不足フィルター
+	dogrunLists = excludeInsufficientDogrunInfo(c, dogrunLists)
 
 	//ブックマーク済みdogrunにフラグ付与
 	dogrunLists, err = setIsBookmarked(c, dogrunLists, bookmarkedDogrunIDsCH)
@@ -207,15 +207,15 @@ func (h *dogrunHandler) SearchAroundAndTagDogruns(c echo.Context, condition dto.
 	}
 	logger.Infof("DBから取得数:%d", len(dogrunsD))
 
-	//ドッグラン情報の過不足フィルター
-	dogrunsD = excludeInsufficientDogrunInfo(c, dogrunsD)
-
 	dogrunLists := []dto.DogrunLists{}
 
 	for _, dogrun := range dogrunsD {
 		dogrunLists = append(dogrunLists, resolveDogrunListByOnlyDB(dogrun))
 	}
 	logger.Infof("レスポンス件数:%d", len(dogrunLists))
+
+	//ドッグラン情報の過不足フィルター
+	dogrunLists = excludeInsufficientDogrunInfo(c, dogrunLists)
 
 	//ブックマーク済みdogrunにフラグ付与
 	dogrunLists, err = setIsBookmarked(c, dogrunLists, bookmarkedDogrunIDsCH)
@@ -746,6 +746,7 @@ func resolveDogrunListByOnlyDB(dogrunD model.Dogrun) dto.DogrunLists {
 	var emptyDogrunG googleplace.BaseResource
 	return dto.DogrunLists{
 		DogrunID: dogrunD.DogrunID.Int64,
+		PlaceId:  dogrunD.PlaceId.String,
 		Name:     dogrunD.Name.String,
 		Address:  resolveDogrunAddress(emptyDogrunG, dogrunD),
 		Location: dto.Location{
@@ -871,14 +872,14 @@ func (h *dogrunHandler) persistenceDogrunPlaceId(c echo.Context, placeId string)
 //
 // return:
 //   - []model.Dogrun:	チェック済みドッグラン情報
-func excludeInsufficientDogrunInfo(c echo.Context, dogrunsDParam []model.Dogrun) []model.Dogrun {
+func excludeInsufficientDogrunInfo(c echo.Context, dogrunsDParam []dto.DogrunLists) []dto.DogrunLists {
 	logger := log.GetLogger(c).Sugar()
-	dogruns := []model.Dogrun{}
+	dogruns := []dto.DogrunLists{}
 	for _, dogrun := range dogrunsDParam {
 		if dogrun.IsSufficientInfo() {
 			dogruns = append(dogruns, dogrun)
 		} else {
-			logger.Infof("ドッグラン:%d を情報不足として、dtoから除外", dogrun.DogrunID.Int64)
+			logger.Infof("ドッグラン:%d を情報不足として、dtoから除外", dogrun.DogrunID)
 		}
 	}
 

@@ -42,6 +42,27 @@ type DogrunLists struct {
 	IsManaged         bool            `json:"isManaged"`
 }
 
+/*
+データの過不足チェック
+Dogrun情報としての最低限必要情報のチェック
+*/
+func (d *DogrunLists) IsSufficientInfo() bool {
+	if d.Name == "" {
+		return false
+	}
+	if d.Address.PostCode == "" || d.Address.Address == "" {
+		return false
+	}
+	if d.Location.Latitude == 0 {
+		return false
+	}
+	if d.Location.Longitude == 0 {
+		return false
+	}
+
+	return true
+}
+
 // 営業日情報
 type BusinessHour struct {
 	Regular RegularBusinessHour   `json:"regular"`
