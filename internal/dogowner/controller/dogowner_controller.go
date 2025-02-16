@@ -74,7 +74,5 @@ func (doc *dogOwnerController) DogOwnerSignUp(c echo.Context) error {
 		return wrErr
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{
-		"accessToken": token,
-	})
+	return c.JSON(http.StatusCreated, token)
 }

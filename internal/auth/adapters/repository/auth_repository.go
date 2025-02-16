@@ -16,8 +16,9 @@ import (
 type IAuthRepository interface {
 	CreateDogOwner(c echo.Context, doc *model.DogOwnerCredential) (*model.DogOwnerCredential, error)
 	GetDogOwnerByCredentials(c echo.Context, adoReq dto.AuthDogOwnerReq) ([]model.DogOwnerCredential, error)
+	GetAuthDogOwnerByID(c echo.Context, dogownerID int64) (model.AuthDogOwner, error)
 	// CreateOAuthDogOwner(c echo.Context, dogOwnerCredential *model.DogOwnerCredential) (*model.DogOwnerCredential, error)
-	UpdateDogownerJwtID(c echo.Context, doID int64, ji string) error
+	UpdateDogownerJwtID(c echo.Context, doID int64, ji string, rji string) error
 	GetJwtID(c echo.Context, userID int64, modelType any, result any, columnName string) (string, error)
 	GetDogownerJwtID(c echo.Context, dogownerID int64) (string, error)
 	GetDogrunmgJwtID(c echo.Context, dogownerID int64) (string, error)
@@ -215,6 +216,37 @@ func (ar *authRepository) GetDogOwnerByCredentials(c echo.Context, adoReq dto.Au
 	return results, nil
 }
 
+// GetAuthDogOwnerByID: ドッグオーナーのクレデンシャル取得
+//
+// args:
+//   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
+//   - int64: authDogOwnerのリクエスト情報
+//
+// return:
+//   - *model.DogOwnerCredential: ドッグオーナーのクレデンシャル
+//   - error: error情報
+func (ar *authRepository) GetAuthDogOwnerByID(c echo.Context, dogOwnerID int64) (model.AuthDogOwner, error) {
+	logger := log.GetLogger(c).Sugar()
+
+	var result model.AuthDogOwner
+
+	if err := ar.db.Model(&model.AuthDogOwner{}).
+		Where("dog_owner_id = ?", dogOwnerID).
+		First(&result).Error; err != nil {
+		wrErr := wrErrors.NewWRError(
+			err,
+			"DBからのデータ取得に失敗しました。",
+			wrErrors.NewAuthServerErrorEType())
+
+		logger.Errorf("DB search failure: %v", wrErr)
+
+		return result, wrErr
+	}
+	logger.Debugf("Query Results: %v", result)
+
+	return result, nil
+}
+
 // UpdateDogownerJwtID: 対象のdogownerのjwt_idの更新
 //
 // args:
@@ -228,13 +260,14 @@ func (ar *authRepository) UpdateDogownerJwtID(
 	c echo.Context,
 	doID int64,
 	ji string,
+	rji string,
 ) error {
 	logger := log.GetLogger(c).Sugar()
 
 	// 対象のdogownerのjwt_idの更新
 	err := ar.db.Model(&model.AuthDogOwner{}).
 		Where("dog_owner_id= ?", doID).
-		Update("jwt_id", ji).Error
+		Update("jwt_id", ji).Update("refresh_jwt_id", rji).Error
 
 	if err != nil {
 		wrErr := wrErrors.NewWRError(
@@ -250,7 +283,7 @@ func (ar *authRepository) UpdateDogownerJwtID(
 	return nil
 }
 
-// DeleteDogownerJwtID: 対象のdogownerのjwt_idの削除
+// DeleteDogownerJwtID: 対象のdogownerのjwt_id,refresh_jwt_idの削除
 //
 // args:
 //   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
@@ -264,7 +297,7 @@ func (ar *authRepository) DeleteDogownerJwtID(c echo.Context, doID int64) error 
 	// 対象のdogOwnerのjwt_idの更新
 	if err := ar.db.Model(&model.AuthDogOwner{}).
 		Where("dog_owner_id= ?", doID).
-		Update("jwt_id", nil).Error; err != nil {
+		Update("jwt_id", nil).Update("refresh_jwt_id", nil).Error; err != nil {
 		wrErr := wrErrors.NewWRError(
 			err,
 			"DBへの同期が失敗しました。",

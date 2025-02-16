@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"strconv"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,7 +10,7 @@ import (
 	"github.com/wanrun-develop/wanrun/internal/auth/adapters/repository"
 	"github.com/wanrun-develop/wanrun/internal/auth/core"
 	authDTO "github.com/wanrun-develop/wanrun/internal/auth/core/dto"
-	"github.com/wanrun-develop/wanrun/pkg/errors"
+	model "github.com/wanrun-develop/wanrun/internal/models"
 	wrErrors "github.com/wanrun-develop/wanrun/pkg/errors"
 	"github.com/wanrun-develop/wanrun/pkg/log"
 	"github.com/wanrun-develop/wanrun/pkg/util"
@@ -18,12 +18,12 @@ import (
 )
 
 type IAuthHandler interface {
-	LogInDogowner(c echo.Context, ador authDTO.AuthDogOwnerReq) (string, error)
+	LogInDogowner(c echo.Context, ador authDTO.AuthDogOwnerReq) (authDTO.IssuedJwtRes, error)
 	RevokeDogowner(c echo.Context, dogownerID int64) error
-	LogInDogrunmg(c echo.Context, ador authDTO.AuthDogrunmgReq) (string, error)
+	LogInDogrunmg(c echo.Context, ador authDTO.AuthDogrunmgReq) (authDTO.IssuedJwtRes, error)
 	RevokeDogrunmg(c echo.Context, dmID int64) error
 	// GoogleOAuth(c echo.Context, authorizationCode string, grantType types.GrantType) (dto.ResDogOwnerDto, error)
-	IssueGeneralUserToke(c echo.Context) (string, error)
+	IssueGeneralUserToke(c echo.Context) (authDTO.IssuedJwtRes, error)
 }
 
 type authHandler struct {
@@ -40,34 +40,9 @@ func NewAuthHandler(ar repository.IAuthRepository) IAuthHandler {
 
 // JWTのClaims
 type AccountClaims struct {
-	UserID string `json:"userId"`
-	Role   int    `json:"role"`
+	UserID int64 `json:"userId"`
+	Role   int   `json:"role"`
 	jwt.RegisteredClaims
-}
-
-// GetDogOwnerIDAsInt64: 共通処理で、int64のDogOwnerのID取得。
-//
-// args:
-//   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
-//
-// return:
-//   - int64: dogOwnerのID情報(int64)
-//   - error: error情報
-func (claims *AccountClaims) GetDogOwnerIDAsInt64(c echo.Context) (int64, error) {
-	logger := log.GetLogger(c).Sugar()
-
-	// IDをstringからint64に変換
-	dogOwnerID, err := strconv.ParseInt(claims.UserID, 10, 64)
-	if err != nil {
-		wrErr := errors.NewWRError(
-			nil,
-			"認証情報が違います。",
-			errors.NewDogOwnerClientErrorEType(),
-		)
-		logger.Error(wrErr)
-		return 0, err
-	}
-	return dogOwnerID, nil
 }
 
 // LogInDogowner: dogownerの存在チェックバリデーションとJWTの更新, 署名済みjwtを返す
@@ -77,24 +52,106 @@ func (claims *AccountClaims) GetDogOwnerIDAsInt64(c echo.Context) (int64, error)
 //   - dto.AuthDogOwnerReq: authDogOwnerのリクエスト情報
 //
 // return:
-//   - string: 検証済みのjwt
+//   - authDTO.IssuedJwtRes: 発行済みのjwt
 //   - error: error情報
-func (ah *authHandler) LogInDogowner(c echo.Context, adoReq authDTO.AuthDogOwnerReq) (string, error) {
+func (ah *authHandler) LogInDogowner(c echo.Context, adoReq authDTO.AuthDogOwnerReq) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 
+	ado := model.AuthDogOwner{}
+	var err error
+
+	if adoReq.AuthenticationType == core.PASSWORD {
+		//リクエスト検証
+		ado, err = ah.VerifyRequestAndFetchAuthDogOwnerPassword(c, adoReq)
+		if err != nil {
+			return authDTO.IssuedJwtRes{}, err
+		}
+	} else if adoReq.AuthenticationType == core.REFRESH {
+		if adoReq.RefreshToken == "" {
+			wrErr := wrErrors.NewWRError(
+				nil,
+				"認証トークンの再発行にはリフレッシュトークンが必要です。",
+				wrErrors.NewAuthClientErrorEType())
+			logger.Errorf("refresh token is required: %v", wrErr)
+			return authDTO.IssuedJwtRes{}, wrErr
+		}
+		//リクエスト検証
+		ado, err = ah.VerifyRequestAndFetchAuthDogOwnerRefresh(c, adoReq.RefreshToken)
+		if err != nil {
+			return authDTO.IssuedJwtRes{}, err
+		}
+	} else {
+		wrErr := wrErrors.NewWRError(
+			nil,
+			"適切な認証方法'AuthenticationType'が指定されていません",
+			wrErrors.NewAuthClientErrorEType())
+		logger.Errorf("AuthenticationType is invalid: %v", wrErr)
+		return authDTO.IssuedJwtRes{}, wrErr
+	}
+
+	// 認証トークンのJWT IDの生成
+	jwtID, wrErr := GenerateJwtID(c)
+	if wrErr != nil {
+		return authDTO.IssuedJwtRes{}, wrErr
+	}
+	logger.Infoln("jwt_id", jwtID)
+
+	// リフレッシュトークンのJWT IDの生成
+	refreshJwtID, wrErr := GenerateJwtID(c)
+	if wrErr != nil {
+		return authDTO.IssuedJwtRes{}, wrErr
+	}
+	logger.Infoln("refresh_jwt_id", refreshJwtID)
+
+	// 取得したdogownerのjtw_idの更新
+	if wrErr := ah.ar.UpdateDogownerJwtID(c, ado.DogOwnerID.Int64, jwtID, refreshJwtID); wrErr != nil {
+		return authDTO.IssuedJwtRes{}, wrErr
+	}
+
+	// 作成したDogownerの情報をdto詰め替え
+	jiDTO := authDTO.JwtInfoDTO{
+		AuthUserInfoDTO: authDTO.AuthUserInfoDTO{
+			UserID: ado.DogOwnerID.Int64,
+			RoleID: core.DOGOWNER_ROLE,
+		},
+		JwtID:        jwtID,
+		RefreshJwtID: refreshJwtID,
+	}
+	logger.Infof("dogownerDetail: %v", jiDTO)
+
+	// 署名済みのjwt token取得
+	token, refreshToken, wrErr := GetSignedJwt(c, jiDTO)
+	if wrErr != nil {
+		return authDTO.IssuedJwtRes{}, wrErr
+	}
+
+	return authDTO.IssuedJwtRes{AccessToken: token, RefreshToken: refreshToken}, nil
+}
+
+// VerifyRequestAndFetchAuthDogOwnerPassword	: パスワード認証時のユーザー認証のリクエスト検証とユーザー取得
+// メールアドレスか電話番号のチェック
+// auth_dog_owner系へ取得とチェック
+//
+// args:
+//   - echo.Context:	コンテキスト
+//   - authDTO.AuthDogOwnerReq:	リクエストボディ
+//
+// return:
+//   - model.AuthDogOwner:	認証ユーザー
+//   - error:	エラー
+func (ah *authHandler) VerifyRequestAndFetchAuthDogOwnerPassword(c echo.Context, adoReq authDTO.AuthDogOwnerReq) (model.AuthDogOwner, error) {
+	logger := log.GetLogger(c).Sugar()
 	// EmailとPhoneNumberのバリデーション
 	if wrErr := validateEmailOrPhoneNumber(adoReq); wrErr != nil {
 		logger.Error(wrErr)
-		return "", wrErr
+		return model.AuthDogOwner{}, wrErr
 	}
-
 	logger.Debugf("authDogownerReq: %v, Type: %T", adoReq, adoReq)
 
 	// EmailかPhoneNumberから対象のDogowner情報の取得
 	results, wrErr := ah.ar.GetDogOwnerByCredentials(c, adoReq)
-
 	if wrErr != nil {
-		return "", wrErr
+		return model.AuthDogOwner{}, wrErr
 	}
 
 	// 対象のdogownerがいない場合
@@ -105,9 +162,8 @@ func (ah *authHandler) LogInDogowner(c echo.Context, adoReq authDTO.AuthDogOwner
 			wrErrors.NewAuthClientErrorEType(),
 		)
 		logger.Errorf("Dogowner not found: %v", wrErr)
-		return "", wrErr
+		return model.AuthDogOwner{}, wrErr
 	}
-
 	// 対象のdogownerが複数いるため、データの不整合が起きている(基本的に起きない)
 	if len(results) > 1 {
 		wrErr := wrErrors.NewWRError(
@@ -116,7 +172,7 @@ func (ah *authHandler) LogInDogowner(c echo.Context, adoReq authDTO.AuthDogOwner
 			wrErrors.NewAuthServerErrorEType(),
 		)
 		logger.Errorf("Multiple records found: %v", wrErr)
-		return "", wrErr
+		return model.AuthDogOwner{}, wrErr
 	}
 
 	// パスワードの確認
@@ -125,41 +181,61 @@ func (ah *authHandler) LogInDogowner(c echo.Context, adoReq authDTO.AuthDogOwner
 			err,
 			"パスワードが間違っています",
 			wrErrors.NewAuthServerErrorEType())
-
 		logger.Errorf("Password compare failure: %v", wrErr)
-
-		return "", wrErr
+		return model.AuthDogOwner{}, wrErr
 	}
 
-	// 更新用のJWT IDの生成
-	jwtID, wrErr := GenerateJwtID(c)
+	return results[0].AuthDogOwner, nil
+}
 
-	if wrErr != nil {
-		return "", wrErr
+// VerifyRequestAndFetchAuthDogOwnerRefresh:
+//
+// args:
+//   - echo.Context:	コンテキスト
+//   - string:	リフレッシュトークン
+//
+// return:
+//   - model.AuthDogOwner:	認証ユーザー
+//   - error:	エラー
+func (ah *authHandler) VerifyRequestAndFetchAuthDogOwnerRefresh(c echo.Context, refreshToken string) (model.AuthDogOwner, error) {
+	logger := log.GetLogger(c).Sugar()
+
+	claims := &AccountClaims{}
+
+	// 署名キーを指定
+	token, err := jwt.ParseWithClaims(refreshToken, claims, func(token *jwt.Token) (interface{}, error) {
+		// 署名アルゴリズムが適切かチェック
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			err := wrErrors.NewWRError(nil, fmt.Sprintf("unexpected signing method: %v", token.Header["alg"]), wrErrors.NewAuthServerErrorEType())
+			logger.Error(err)
+			return nil, err
+		}
+		return []byte(configs.FetchConfigStr("jwt.os.secret.key")), nil
+	})
+	if err != nil {
+		err := wrErrors.NewWRError(err, "リフレッシュトークンの著名検証に失敗しました。", wrErrors.NewAuthServerErrorEType())
+		return model.AuthDogOwner{}, err
 	}
 
-	// 取得したdogownerのjtw_idの更新
-	if wrErr := ah.ar.UpdateDogownerJwtID(c, results[0].AuthDogOwner.DogOwner.DogOwnerID.Int64, jwtID); wrErr != nil {
-		return "", wrErr
+	// クレームを取得
+	refreshClaim, ok := token.Claims.(*AccountClaims)
+	if !ok || !token.Valid {
+		err = wrErrors.NewWRError(nil, "リフレッシュトークンは不正です。", wrErrors.NewAuthServerErrorEType())
+		logger.Error(err)
+		return model.AuthDogOwner{}, err
 	}
 
-	// 作成したDogownerの情報をdto詰め替え
-	dogownerDetail := authDTO.UserAuthInfoDTO{
-		UserID: results[0].AuthDogOwner.DogOwnerID.Int64,
-		JwtID:  jwtID,
-		RoleID: core.DOGOWNER_ROLE,
+	//jtiの検証
+	ado, err := ah.ar.GetAuthDogOwnerByID(c, refreshClaim.UserID)
+	if err != nil {
+		return model.AuthDogOwner{}, err
 	}
-
-	logger.Infof("dogownerDetail: %v", dogownerDetail)
-
-	// 署名済みのjwt token取得
-	token, wrErr := GetSignedJwt(c, dogownerDetail)
-
-	if wrErr != nil {
-		return "", wrErr
+	if ado.RefreshJwtID.String != refreshClaim.ID {
+		err = wrErrors.NewWRError(nil, "リフレッシュトークンは有効でないか、すでに失効済みです。", wrErrors.NewAuthServerErrorEType())
+		logger.Error(err)
+		return model.AuthDogOwner{}, err
 	}
-
-	return token, nil
+	return ado, nil
 }
 
 // RevokeDogowner: dogownerのRevoke機能
@@ -188,7 +264,7 @@ func (ah *authHandler) RevokeDogowner(c echo.Context, doID int64) error {
 // return:
 //   - string: 検証済みのjwt
 //   - error: error情報
-func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmgReq) (string, error) {
+func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmgReq) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 
 	logger.Debugf("authDogrunmgReq: %v, Type: %T", admReq, admReq)
@@ -197,7 +273,7 @@ func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmg
 	results, err := ah.ar.GetDogrunmgByCredentials(c, admReq.Email)
 
 	if err != nil {
-		return "", err
+		return authDTO.IssuedJwtRes{}, err
 	}
 
 	// 対象のdogrunmgがいない場合
@@ -208,7 +284,7 @@ func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmg
 			wrErrors.NewAuthClientErrorEType(),
 		)
 		logger.Errorf("Dogrunmg not found: %v", wrErr)
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// 対象のdogrunmgが複数いるため、データの不整合が起きている(emailをuniqueにしているため基本的に起きない)
@@ -219,7 +295,7 @@ func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmg
 			wrErrors.NewAuthServerErrorEType(),
 		)
 		logger.Errorf("Multiple records found for email (expected unique): %v", wrErr)
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// パスワードの確認
@@ -231,19 +307,19 @@ func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmg
 
 		logger.Errorf("Password compare failure: %v", wrErr)
 
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// 更新用のJWT IDの生成
 	jwtID, wrErr := GenerateJwtID(c)
 
 	if wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// 取得したdogrunmgのjwt_idの更新
 	if wrErr = ah.ar.UpdateDogrunmgJwtID(c, results[0].AuthDogrunmg.Dogrunmg.DogrunmgID.Int64, jwtID); wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// dogrunmgがadminかどうかの識別
@@ -255,22 +331,23 @@ func (ah *authHandler) LogInDogrunmg(c echo.Context, admReq authDTO.AuthDogrunmg
 	}
 
 	// 取得したDogrunmgの情報をdto詰め替え
-	dogrunmgDetail := authDTO.UserAuthInfoDTO{
-		UserID: results[0].AuthDogrunmg.DogrunmgID.Int64,
-		JwtID:  jwtID,
-		RoleID: roleID,
+	dogrunmgDetail := authDTO.JwtInfoDTO{
+		AuthUserInfoDTO: authDTO.AuthUserInfoDTO{
+			UserID: results[0].AuthDogrunmg.DogrunmgID.Int64,
+			RoleID: roleID,
+		},
+		JwtID: jwtID,
 	}
 
 	logger.Infof("dogrunmgDetail: %v", dogrunmgDetail)
 
 	// 署名済みのjwt token取得
-	token, wrErr := GetSignedJwt(c, dogrunmgDetail)
-
+	token, refreshToken, wrErr := GetSignedJwt(c, dogrunmgDetail)
 	if wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
-	return token, nil
+	return authDTO.IssuedJwtRes{AccessToken: token, RefreshToken: refreshToken}, nil
 }
 
 // RevokeDogrunmg: dogrunmgのRevoke機能
@@ -357,24 +434,35 @@ Google OAuth認証
 //
 // args:
 //   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
-//   - authDTO.UserAuthInfoDTO: jwtで使用する情報
+//   - authDTO.JwtInfoDTO: jwtで使用する情報
 //
 // return:
-//   - string: 署名したtoken
+//   - string: 署名した認証トークン
+//   - string: 署名したリフレッシュトークン
 //   - error: error情報
-func GetSignedJwt(c echo.Context, uaDTO authDTO.UserAuthInfoDTO) (string, error) {
+func GetSignedJwt(c echo.Context, jiDTO authDTO.JwtInfoDTO) (string, string, error) {
 	// 秘密鍵取得
 	secretKey := configs.FetchConfigStr("jwt.os.secret.key")
 	jwtExpTime := configs.FetchConfigInt("jwt.exp.time")
 
-	// jwt token生成
-	signedToken, wrErr := createToken(c, secretKey, uaDTO, jwtExpTime)
-
+	// jwt 認証トークン生成
+	signedToken, wrErr := createToken(c, secretKey, jiDTO.AuthUserInfoDTO, jiDTO.JwtID, jwtExpTime)
 	if wrErr != nil {
-		return "", wrErr
+		return "", "", wrErr
 	}
 
-	return signedToken, wrErr
+	if jiDTO.RefreshJwtID == "" {
+		return signedToken, "", nil
+	}
+
+	RefreshJwtExpTime := configs.FetchConfigInt("refresh.jwt.exp.time")
+	// jwt リフレッシュトークン生成
+	signedRefreshToken, wrErr := createToken(c, secretKey, jiDTO.AuthUserInfoDTO, jiDTO.RefreshJwtID, RefreshJwtExpTime)
+	if wrErr != nil {
+		return "", "", wrErr
+	}
+
+	return signedToken, signedRefreshToken, nil
 }
 
 // createToken: 指定された秘密鍵を使用して認証用のJWTトークンを生成
@@ -383,6 +471,7 @@ func GetSignedJwt(c echo.Context, uaDTO authDTO.UserAuthInfoDTO) (string, error)
 //   - echo.Context: Echoのコンテキスト。リクエストやレスポンスにアクセスするために使用
 //   - string: secretKey   トークンの署名に使用する秘密鍵を表す文字列
 //   - authDTO.UserAuthInfoDTO: jwtで使用する情報
+//   - jwtID:	jwt_id値
 //   - int: expTime トークンの有効期限を秒単位で指定. 0なら無期限とする
 //
 // return:
@@ -391,7 +480,8 @@ func GetSignedJwt(c echo.Context, uaDTO authDTO.UserAuthInfoDTO) (string, error)
 func createToken(
 	c echo.Context,
 	secretKey string,
-	uaDTO authDTO.UserAuthInfoDTO,
+	uaDTO authDTO.AuthUserInfoDTO,
+	jwtID string,
 	expTime int,
 ) (string, error) {
 	logger := log.GetLogger(c).Sugar()
@@ -408,14 +498,13 @@ func createToken(
 
 	// JWTのペイロード
 	claims := AccountClaims{
-		UserID: strconv.FormatInt(uaDTO.UserID, 10), // stringにコンバート
+		UserID: uaDTO.UserID, // stringにコンバート
 		Role:   uaDTO.RoleID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: expiresNumericDate, // 有効時間
-			ID:        uaDTO.JwtID,
+			ID:        jwtID,
 		},
 	}
-
 	// token生成
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
@@ -500,13 +589,12 @@ func validateEmailOrPhoneNumber(doReq authDTO.AuthDogOwnerReq) error {
 // return:
 //   - string:	jwt
 //   - error:	エラー
-func (ah *authHandler) IssueGeneralUserToke(c echo.Context) (string, error) {
+func (ah *authHandler) IssueGeneralUserToke(c echo.Context) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 	logger.Info("一般ユーザートークンの発行")
 
-	userInfoDTO := authDTO.UserAuthInfoDTO{
+	auiDTO := authDTO.AuthUserInfoDTO{
 		UserID: core.GENERAL_USER_ID,
-		JwtID:  core.GENERAL_USER_JWT_ID,
 		RoleID: core.GENERAL,
 	}
 
@@ -514,11 +602,11 @@ func (ah *authHandler) IssueGeneralUserToke(c echo.Context) (string, error) {
 	secretKey := configs.FetchConfigStr("jwt.os.secret.key")
 
 	// jwt token生成(無期限)
-	signedToken, wrErr := createToken(c, secretKey, userInfoDTO, 0)
+	signedToken, wrErr := createToken(c, secretKey, auiDTO, core.GENERAL_USER_JWT_ID, 0)
 
 	if wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
-	return signedToken, wrErr
+	return authDTO.IssuedJwtRes{AccessToken: signedToken}, wrErr
 }

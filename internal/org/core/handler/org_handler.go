@@ -20,7 +20,7 @@ import (
 )
 
 type IOrgHandler interface {
-	OrgSignUp(c echo.Context, orgReq dto.OrgReq) (string, error)
+	OrgSignUp(c echo.Context, orgReq dto.OrgReq) (authDTO.IssuedJwtRes, error)
 }
 
 type orgHandler struct {
@@ -50,7 +50,7 @@ func NewOrgHandler(
 func (oh *orgHandler) OrgSignUp(
 	c echo.Context,
 	orgReq dto.OrgReq,
-) (string, error) {
+) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 
 	// パスワードのハッシュ化
@@ -63,19 +63,19 @@ func (oh *orgHandler) OrgSignUp(
 			wrErrors.NewOrgClientErrorEType(),
 		)
 		logger.Error(wrErr)
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// JWT IDの生成
 	jwtID, wrErr := authHandler.GenerateJwtID(c)
 
 	if wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// orgのEmailバリデーション
 	if wrErr := oh.af.OrgEmailValidate(c, orgReq.ContactEmail); wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// requestからorgの構造体に詰め替え
@@ -145,24 +145,26 @@ func (oh *orgHandler) OrgSignUp(
 
 	}); err != nil {
 		logger.Error("Transaction failed:", err)
-		return "", err
+		return authDTO.IssuedJwtRes{}, err
 	}
 
 	// 作成したdogrunmgの情報をdto詰め替え
-	dogrunmgrDetail := authDTO.UserAuthInfoDTO{
-		UserID: orgInfo.AuthDogrunmg.DogrunmgID.Int64,
-		JwtID:  orgInfo.AuthDogrunmg.JwtID.String,
-		RoleID: core.DOGRUNMG_ADMIN_ROLE,
+	dogrunmgrDetail := authDTO.JwtInfoDTO{
+		AuthUserInfoDTO: authDTO.AuthUserInfoDTO{
+			UserID: orgInfo.AuthDogrunmg.DogrunmgID.Int64,
+			RoleID: core.DOGRUNMG_ADMIN_ROLE,
+		},
+		JwtID: orgInfo.AuthDogrunmg.JwtID.String,
 	}
 
 	logger.Infof("dogrunmgDetail: %v", dogrunmgrDetail)
 
 	// 署名済みのjwt token取得
-	token, wrErr := authHandler.GetSignedJwt(c, dogrunmgrDetail)
+	token, refreshToken, wrErr := authHandler.GetSignedJwt(c, dogrunmgrDetail)
 
 	if wrErr != nil {
-		return "", wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
-	return token, nil
+	return authDTO.IssuedJwtRes{AccessToken: token, RefreshToken: refreshToken}, nil
 }

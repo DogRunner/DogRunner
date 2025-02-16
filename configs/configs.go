@@ -76,7 +76,8 @@ func bindEnvs() {
 	_ = v.BindEnv("env", "ENV")
 	_ = v.BindEnv("google.place.api.key", "GOOGLE_PLACE_API_KEY")
 	_ = v.BindEnv("jwt.os.secret.key", "SECRET_KEY")                // jwt生成用の秘密鍵
-	_ = v.BindEnv("jwt.exp.time", "JWT_EXP_TIME")                   // jwt生成用の秘密鍵
+	_ = v.BindEnv("jwt.exp.time", "JWT_EXP_TIME")                   // jwt生成用の有効期限（時間）
+	_ = v.BindEnv("refresh.jwt.exp.time", "REFRESH_JWT_EXP_TIME")   // jwt生成用の有効期限（時間）
 	_ = v.BindEnv("gcp.client.id", "GCP_CLIENT_ID")                 // oauthの際のgcp credentials
 	_ = v.BindEnv("gcp.client.secret", "GCP_CLIENT_SECRET")         // oauthの際のgcp credentials
 	_ = v.BindEnv("gcp.redirect.uri", "GCP_REDIRECT_URI")           // oauthの際のgcp credentials

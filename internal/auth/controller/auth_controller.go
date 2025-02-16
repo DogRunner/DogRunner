@@ -144,9 +144,7 @@ func (ac *authController) LogInDogowner(c echo.Context) error {
 		return wrErr
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"accessToken": token,
-	})
+	return c.JSON(http.StatusOK, token)
 }
 
 // RevokeDogowner: dogownerのrevoke機能
@@ -210,9 +208,7 @@ func (ac *authController) LogInDogrunmg(c echo.Context) error {
 		return wrErr
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"accessToken": token,
-	})
+	return c.JSON(http.StatusOK, token)
 }
 
 // RevokeDogrunmg: dogrunmgのrevoke機能
@@ -273,7 +269,5 @@ func (ac *authController) IssueGeneralUserToken(c echo.Context) error {
 	if wrErr != nil {
 		return wrErr
 	}
-	return c.JSON(http.StatusOK, map[string]string{
-		"accessToken": token,
-	})
+	return c.JSON(http.StatusOK, token)
 }
