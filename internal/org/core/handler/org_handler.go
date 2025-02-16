@@ -20,7 +20,7 @@ import (
 )
 
 type IOrgHandler interface {
-	OrgSignUp(c echo.Context, orgReq dto.OrgReq) (authDTO.IssuedJwT, error)
+	OrgSignUp(c echo.Context, orgReq dto.OrgReq) (authDTO.IssuedJwtRes, error)
 }
 
 type orgHandler struct {
@@ -50,7 +50,7 @@ func NewOrgHandler(
 func (oh *orgHandler) OrgSignUp(
 	c echo.Context,
 	orgReq dto.OrgReq,
-) (authDTO.IssuedJwT, error) {
+) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 
 	// パスワードのハッシュ化
@@ -63,19 +63,19 @@ func (oh *orgHandler) OrgSignUp(
 			wrErrors.NewOrgClientErrorEType(),
 		)
 		logger.Error(wrErr)
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// JWT IDの生成
 	jwtID, wrErr := authHandler.GenerateJwtID(c)
 
 	if wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// orgのEmailバリデーション
 	if wrErr := oh.af.OrgEmailValidate(c, orgReq.ContactEmail); wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// requestからorgの構造体に詰め替え
@@ -145,7 +145,7 @@ func (oh *orgHandler) OrgSignUp(
 
 	}); err != nil {
 		logger.Error("Transaction failed:", err)
-		return authDTO.IssuedJwT{}, err
+		return authDTO.IssuedJwtRes{}, err
 	}
 
 	// 作成したdogrunmgの情報をdto詰め替え
@@ -163,8 +163,8 @@ func (oh *orgHandler) OrgSignUp(
 	token, refreshToken, wrErr := authHandler.GetSignedJwt(c, dogrunmgrDetail)
 
 	if wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
-	return authDTO.IssuedJwT{AccessToken: token, RefreshToken: refreshToken}, nil
+	return authDTO.IssuedJwtRes{AccessToken: token, RefreshToken: refreshToken}, nil
 }

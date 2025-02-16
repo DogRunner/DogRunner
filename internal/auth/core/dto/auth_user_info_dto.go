@@ -11,7 +11,7 @@ type JwtInfoDTO struct {
 	RefreshJwtID string
 }
 
-type IssuedJwT struct {
+type IssuedJwtRes struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken,omitempty"`
 }

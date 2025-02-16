@@ -18,7 +18,7 @@ import (
 )
 
 type IDogOwnerHandler interface {
-	DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerReq) (authDTO.IssuedJwT, error)
+	DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerReq) (authDTO.IssuedJwtRes, error)
 }
 
 type dogOwnerHandler struct {
@@ -54,7 +54,7 @@ func NewDogOwnerHandler(
 // return:
 //   - string
 //   - error: error情報
-func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerReq) (authDTO.IssuedJwT, error) {
+func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerReq) (authDTO.IssuedJwtRes, error) {
 	logger := log.GetLogger(c).Sugar()
 
 	// パスワードのハッシュ化
@@ -67,20 +67,20 @@ func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerR
 			wrErrors.NewDogOwnerClientErrorEType(),
 		)
 		logger.Error(wrErr)
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// EmailとPhoneNumberのバリデーション
 	if wrErr := validateEmailOrPhoneNumber(doReq); wrErr != nil {
 		logger.Error(wrErr)
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// JWT IDの生成
 	jwtID, wrErr := authHandler.GenerateJwtID(c)
 
 	if wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// requestからDogOwnerの構造体に詰め替え
@@ -103,12 +103,12 @@ func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerR
 
 	// Emailの重複チェック
 	if wrErr := doh.ar.CheckDuplicate(c, model.EmailField, dogOwnerCredential.Email); wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// PhoneNumberの重複チェック
 	if wrErr := doh.ar.CheckDuplicate(c, model.PhoneNumberField, dogOwnerCredential.PhoneNumber); wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
 	// dogOwnerの作成する1トランザクション
@@ -134,7 +134,7 @@ func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerR
 
 	}); err != nil {
 		logger.Error("Transaction failed:", err)
-		return authDTO.IssuedJwT{}, err
+		return authDTO.IssuedJwtRes{}, err
 	}
 
 	// 正常に終了
@@ -155,10 +155,10 @@ func (doh *dogOwnerHandler) DogOwnerSignUp(c echo.Context, doReq doDTO.DogOwnerR
 	token, refreshToken, wrErr := authHandler.GetSignedJwt(c, dogOwnerDetail)
 
 	if wrErr != nil {
-		return authDTO.IssuedJwT{}, wrErr
+		return authDTO.IssuedJwtRes{}, wrErr
 	}
 
-	return authDTO.IssuedJwT{AccessToken: token, RefreshToken: refreshToken}, nil
+	return authDTO.IssuedJwtRes{AccessToken: token, RefreshToken: refreshToken}, nil
 }
 
 // validateEmailOrPhoneNumber: EmailかPhoneNumberの識別バリデーション。パスワード認証は、EmailかPhoneNumberで登録するため
