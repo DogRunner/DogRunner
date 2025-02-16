@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -157,18 +156,6 @@ func (aj *authJwt) extractAndValidateJwtClaims(c echo.Context) (*handler.Account
 func (aj *authJwt) jwtIDValid(c echo.Context, ac *handler.AccountClaims) error {
 	logger := log.GetLogger(c).Sugar()
 
-	// 共通処理: IDのパース
-	id, err := strconv.ParseInt(ac.UserID, 10, 64)
-	if err != nil {
-		wrErr := wrErrs.NewWRError(
-			nil,
-			"認証情報が異なります",
-			wrErrs.NewAuthClientErrorEType(),
-		)
-		logger.Error(wrErr)
-		return wrErr
-	}
-
 	// Roleによる設定分岐
 	getJwtID := func(role int, id int64) (string, error) {
 		switch role {
@@ -194,7 +181,7 @@ func (aj *authJwt) jwtIDValid(c echo.Context, ac *handler.AccountClaims) error {
 	}
 
 	// JWT IDの取得
-	jwtID, wrErr := getJwtID(ac.Role, id)
+	jwtID, wrErr := getJwtID(ac.Role, ac.UserID)
 
 	if wrErr != nil {
 		logger.Error(wrErr)

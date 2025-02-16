@@ -1,8 +1,6 @@
 package wrcontext
 
 import (
-	"strconv"
-
 	"github.com/labstack/echo/v4"
 	"github.com/wanrun-develop/wanrun/internal/auth/core"
 	"github.com/wanrun-develop/wanrun/internal/auth/core/handler"
@@ -44,23 +42,11 @@ func GetVerifiedClaims(c echo.Context) (*handler.AccountClaims, error) {
 // return:
 //   - int64:	ユーザーID
 func GetLoginUserID(c echo.Context) (int64, error) {
-	logger := log.GetLogger(c).Sugar()
-
 	claims, err := GetVerifiedClaims(c)
 	if err != nil {
 		return 0, err
 	}
-	userID, err := strconv.ParseInt(claims.UserID, 10, 64)
-	if err != nil {
-		logger.Error(err)
-		err = errors.NewWRError(
-			nil,
-			"型の形式が異なっています。",
-			errors.NewAuthClientErrorEType(),
-		)
-		return 0, err
-	}
-	return userID, nil
+	return claims.UserID, nil
 }
 
 // GetLoginUserId: ログインユーザーのdogownerIDの取得
@@ -72,8 +58,6 @@ func GetLoginUserID(c echo.Context) (int64, error) {
 // return:
 //   - int64:	ユーザーID
 func GetLoginDogownerID(c echo.Context) (int64, error) {
-	logger := log.GetLogger(c).Sugar()
-
 	claims, err := GetVerifiedClaims(c)
 	if err != nil {
 		return 0, err
@@ -86,17 +70,7 @@ func GetLoginDogownerID(c echo.Context) (int64, error) {
 		)
 		return 0, err
 	}
-	userID, err := strconv.ParseInt(claims.UserID, 10, 64)
-	if err != nil {
-		logger.Error(err)
-		err = errors.NewWRError(
-			nil,
-			"型の形式が異なっています。",
-			errors.NewAuthClientErrorEType(),
-		)
-		return 0, err
-	}
-	return userID, nil
+	return claims.UserID, nil
 }
 
 // GetLoginUserRole: ログインユーザー（認証済み）のロールを取得する

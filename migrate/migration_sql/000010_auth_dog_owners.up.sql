@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS auth_dog_owners (
     access_token_expiration timestamp,            -- アクセストークンの有効期限
     refresh_token_expiration timestamp,           -- リフレッシュトークンの有効期限（オプション）
     jwt_id varchar(45),
+    refresh_iwt_id varchar(45),
     si_refresh_token varchar(512),
     login_at timestamp
 );

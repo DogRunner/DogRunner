@@ -63,7 +63,5 @@ func (o *orgController) OrgSignUp(c echo.Context) error {
 		return wrErr
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{
-		"accessToken": token,
-	})
+	return c.JSON(http.StatusCreated, token)
 }

@@ -20,3 +20,9 @@ const (
 	GENERAL_USER_ID     int64  = -999
 	GENERAL_USER_JWT_ID string = "general"
 )
+
+// 認証方法
+const (
+	PASSWORD string = "password"
+	REFRESH  string = "refresh"
+)
