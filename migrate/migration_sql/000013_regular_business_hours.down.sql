@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS regular_business_hours CASCADE;
