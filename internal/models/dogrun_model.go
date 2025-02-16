@@ -87,27 +87,6 @@ func (d *Dogrun) IsSpecialBusinessHoursNotEmpty() bool {
 }
 
 /*
-データの過不足チェック
-Dogrun情報としての最低限必要情報のチェック
-*/
-func (d *Dogrun) IsSufficientInfo() bool {
-	if !d.Name.Valid {
-		return false
-	}
-	if !d.Address.Valid {
-		return false
-	}
-	if !d.Latitude.Valid {
-		return false
-	}
-	if !d.Longitude.Valid {
-		return false
-	}
-
-	return true
-}
-
-/*
 対象のドッグランの通常営業時時間データから、指定されたの曜日(数値:0~6)の営業時間データを返す
 */
 func (d *Dogrun) FetchTargetRegularBusinessHour(day int) RegularBusinessHour {
