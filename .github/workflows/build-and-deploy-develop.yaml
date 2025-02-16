@@ -14,10 +14,19 @@ on:
       - "Dockerfile"
       - "go.mod"
       - "go.sum"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Select branch to deploy"
+        required: true
+        default: "develop"
+        type: choice
+        options:
+          - develop
 
 env:
   AWS_REGION: ap-northeast-1
-  AWS_ROLE_ARN: 
+  AWS_ROLE_ARN: arn:aws:iam::${{ vars.DEVELOP_AWS_ACCOUNT }}:role/github-actions
 
   ECR_REPOSITORY: wr-${{ vars.ENV }}-wanrun
   ECS_SERVICE: wr-${{ vars.ENV }}-wanrun
