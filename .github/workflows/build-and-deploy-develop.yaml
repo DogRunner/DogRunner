@@ -66,6 +66,7 @@ jobs:
           name: wanrun-arm64
           path: main
           if-no-files-found: error
+          retention-days: 1
 
   build-and-deploy:
     name: Docker Build And Deploy
@@ -159,3 +160,10 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Delete Artifact
+        uses: geekyeggo/delete-artifact@v5.1.0
+        if: always()
+        with:
+          name: wanrun-arm64
+          failOnError: true
