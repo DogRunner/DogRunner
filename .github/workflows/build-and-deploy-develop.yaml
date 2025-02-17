@@ -51,7 +51,6 @@ jobs:
         id: setup-go
         with:
           go-version: 1.21.1
-          go-version-file: "go.mod"
 
       - name: Download Go Modules
         if: ${{ steps.setup-go.outputs.cache-hit != 'true' }}
@@ -109,6 +108,10 @@ jobs:
             ${{ github.ref }}-${{ github.sha }}
             ${{ github.ref }}
             refs/head/${{ vars.ENV }}
+
+      # NOTE: https://github.com/docker/buildx/issues/464#issuecomment-740434862
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.4.0
 
       - name: Set up buildx
         id: buildx
