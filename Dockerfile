@@ -1,7 +1,7 @@
 ################################################################ 
 # Develop
 ################################################################ 
-FROM golang:1.22.1 as Dev
+FROM golang:1.22.1 as develop
 ENV TZ=Asia/Tokyo
 
 ENV CGO_ENABLED=0
@@ -55,11 +55,11 @@ CMD ["air", "-c", ".air.toml"]
 ################################################################ 
 # Deploy
 ################################################################ 
-FROM amazonlinux:2023.6.20250203.1 AS Deploy
+FROM --platform=arm64 amazonlinux:2023.6.20250203.1 AS deploy
 ENV TZ=Asia/Tokyo
 
 WORKDIR /go
-RUN dnf install -y tzdata && \
+RUN dnf install -y tzdata shadow-utils && \
         rm -rf /var/cache/dnf/*
 
 RUN groupadd -g 10001 wanrun \
