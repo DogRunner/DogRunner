@@ -111,11 +111,11 @@ jobs:
             refs/head/${{ vars.ENV }}
 
       # NOTE: https://github.com/docker/buildx/issues/464#issuecomment-740434862
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.4.0
+      # - name: Set up QEMU
+      #   uses: docker/setup-qemu-action@v3.4.0
 
-      - name: Install QEMU emulators
-        run: docker run --rm --privileged tonistiigi/binfmt --install all
+      # - name: Install QEMU emulators
+      #   run: docker run --rm --privileged tonistiigi/binfmt --install all
 
       - name: Set up buildx
         id: buildx
