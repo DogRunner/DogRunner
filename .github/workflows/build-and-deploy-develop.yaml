@@ -113,6 +113,9 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3.4.0
 
+      - name: Install QEMU emulators
+        run: docker run --rm --privileged tonistiigi/binfmt --install all
+
       - name: Set up buildx
         id: buildx
         uses: docker/setup-buildx-action@v3.8.0
