@@ -37,16 +37,12 @@ env:
 jobs:
   go-build:
     name: Go Build
-    runs-on: 
-      labels: arm64_ubuntu2404_2core # ARM64 Runner
+    runs-on: ubuntu-latest
     environment: develop
     permissions: 
       contents: read
 
     steps:
-      - name: Check Architecture Type
-        run: uname -m
-
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
@@ -63,7 +59,7 @@ jobs:
 
       - name: Build Go Binary
         run: | 
-          GOOS=linux GOARCH=arm64 go build -o main -trimpath -ldflags "-s -w" cmd/wanrun/main.go
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o main -trimpath -ldflags "-s -w" cmd/wanrun/main.go
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4.6.0
@@ -71,11 +67,11 @@ jobs:
           name: wanrun-arm64
           path: main
           if-no-files-found: error
+
   build-and-deploy:
     name: Docker Build And Deploy
     needs: go-build
-    runs-on:
-      labels: arm64_ubuntu2404_2core # ARM64 Runner
+    runs-on: ubuntu-latest
     environment: develop
     permissions: 
       id-token: write
@@ -129,6 +125,7 @@ jobs:
         uses: docker/build-push-action@v6.13.0
         with:
             context: ./
+            platforms: linux/arm64
             file: ./Dockerfile
             builder: ${{ steps.buildx.outputs.name }}
             push: true
